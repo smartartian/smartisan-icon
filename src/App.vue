@@ -9,7 +9,37 @@
         placeholder="搜索图标..."
       >
     </div>
+    
+    <!-- 主题切换器 -->
+    <div class="theme-switcher">
+      <div 
+        class="theme-btn no-bg" 
+        :class="{ active: currentTheme === 0 }" 
+        @click="changeTheme(0)" 
+        title="无背景"
+      ></div>
+      <div 
+        v-for="(bg, index) in backgroundImages"
+        :key="bg"
+        class="theme-btn" 
+        :class="{ active: currentTheme === index + 1 }" 
+        :style="{ backgroundImage: `url(${bg})` }"
+        @click="changeTheme(index + 1)"
+        :title="`背景 ${index + 1}`"
+      ></div>
+    </div>
   </header>
+
+  <!-- 全局背景 -->
+  <div class="global-bg-container">
+    <div 
+      v-for="(bg, index) in backgroundImages"
+      :key="bg"
+      class="bg-layer" 
+      :class="{ active: currentTheme === index + 1 }"
+      :style="{ backgroundImage: `url(${bg})` }"
+    ></div>
+  </div>
 
   <div class="container">
     <!-- 页面加载遮罩 -->
@@ -21,9 +51,6 @@
     <div class="icon-grid" v-show="!loading">
       <div v-for="icon in paginatedIcons" :key="icon.filename" class="icon-card" :title="icon.displayName">
         <div class="icon-image-wrapper" :class="{ loading: !icon.loaded }">
-          <!-- 动态背景层 -->
-          <div class="icon-bg" :style="{ backgroundImage: `url(t/${(allIcons.indexOf(icon.filename) % 3) + 1}.webp)` }"></div>
-          
           <img 
             :src="icon.path" 
             :alt="icon.displayName" 
@@ -87,6 +114,35 @@ const pageSize = 60
 const iconMap = ref({})
 const allIcons = ref([]) // 初始化为空，等待加载
 const loading = ref(true) // 页面级加载状态
+const currentTheme = ref(1) // 默认背景 1
+
+// 移除 bgStyle 计算属性，不再需要
+// const bgStyle = computed(() => ...)
+
+const changeTheme = (index) => {
+    currentTheme.value = index
+    // 可选：保存到 localStorage
+    localStorage.setItem('smartisan-theme', index)
+}
+
+const backgroundImages = ref([
+    't/1.png',
+    't/2.png',
+    't/3.png'
+])
+
+// 初始化主题时，如果保存的索引超出了现有图片范围，重置为 1
+const initTheme = () => {
+    const saved = localStorage.getItem('smartisan-theme')
+    if (saved !== null) {
+        let index = parseInt(saved, 10)
+        // 0 是无背景，1~N 是图片背景
+        if (index > 0 && index > backgroundImages.value.length) {
+            index = 1
+        }
+        currentTheme.value = index
+    }
+}
 
 // 图片加载状态字典，使用 reactive 保证响应性
 const imageLoadStatus = reactive({})
@@ -101,6 +157,7 @@ onMounted(async () => {
     // 由于 data.js 内容是 "window.icons = [...]"，我们可以通过 script 标签加载，或者 fetch 并 eval (不推荐)
     // 更好的方式是 fetch 一个 JSON。为了兼容旧逻辑，我们先尝试动态插入 script 标签加载 data.js
     
+    initTheme() // 初始化主题
     await loadScript('data.js')
     const rawIcons = window.icons || []
 
