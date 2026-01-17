@@ -28,16 +28,29 @@
         </header>
 
         <div class="container">
-            <div class="icon-grid">
-                <div v-for="icon in paginatedIcons" :key="icon.filename" class="icon-card" :title="icon.filename">
-                    <div class="icon-image-wrapper">
-                        <img :src="icon.path" :alt="icon.displayName" loading="lazy" :id="'img-' + icon.filename">
+            <!-- 页面加载遮罩 -->
+            <div v-if="loading" class="page-loader">
+                <div class="loader-spinner"></div>
+                <div class="loader-text">加载图标库...</div>
+            </div>
+
+            <div class="icon-grid" v-show="!loading">
+                <div v-for="icon in paginatedIcons" :key="icon.filename" class="icon-card" :title="icon.displayName">
+                    <div class="icon-image-wrapper" :class="{ loading: !icon.loaded }">
+                        <img 
+                            :src="icon.path" 
+                            :alt="icon.displayName" 
+                            :title="icon.displayName"
+                            loading="lazy" 
+                            :id="'img-' + icon.filename"
+                            @load="handleImageLoad(icon)"
+                            :class="{ loaded: icon.loaded }"
+                        >
                     </div>
-                    <div class="icon-name" :title="icon.filename">{{ icon.displayName }}</div>
+                    <div class="icon-name" :title="icon.displayName">{{ icon.displayName }}</div>
                     
                     <div class="icon-actions">
                         <button class="action-btn" @click="handleCopy(icon.path, '图片路径已复制')">复制路径</button>
-                        <button class="action-btn" @click="handleCopy(icon.filename, '图片文件名已复制')">复制文件名</button>
                         <button class="action-btn" @click="handleCopy(icon.displayName, '图片名称已复制')">复制名称</button>
                         <button class="action-btn" @click="handleBase64(icon)">复制 Base64</button>
                     </div>
@@ -82,7 +95,7 @@
     <script src="data.js"></script>
     
     <script type="module">
-        import { createApp, ref, computed, onMounted, watch } from 'vue'
+        import { createApp, ref, computed, onMounted, watch, reactive } from 'vue'
 
         createApp({
             setup() {
@@ -90,26 +103,55 @@
                 const currentPage = ref(1)
                 const pageSize = 60
                 const iconMap = ref({})
-                const allIcons = ref(window.icons || [])
+                const allIcons = ref([]) // 初始化为空，等待加载
+                const loading = ref(true) // 页面级加载状态
+                
+                // 图片加载状态字典，使用 reactive 保证响应性
+                const imageLoadStatus = reactive({})
 
                 // 加载映射文件
                 onMounted(() => {
+                    // 模拟更自然的加载过程，或者等待 window.icons 就绪
+                    // 这里假设 window.icons 已经由 data.js 加载
+                    const rawIcons = window.icons || []
+                    
                     fetch('app_icon_map.json')
                         .then(response => response.json())
                         .then(mapData => {
                             const map = {}
-                            Object.entries(mapData).forEach(([displayName, filenames]) => {
-                                if (Array.isArray(filenames)) {
-                                    filenames.forEach(name => {
-                                        map[name] = displayName
-                                    })
-                                } else {
-                                    map[filenames] = displayName
-                                }
+                            const orderedList = []
+                            const stemToFilename = {}
+                            const remainingFiles = new Set(rawIcons)
+
+                            rawIcons.forEach(filename => {
+                                const stem = filename.replace(/\.[^/.]+$/, "")
+                                stemToFilename[stem] = filename
                             })
+
+                            Object.entries(mapData).forEach(([displayName, filenames]) => {
+                                const stems = Array.isArray(filenames) ? filenames : [filenames]
+                                stems.forEach(stem => {
+                                    map[stem] = displayName
+                                    const filename = stemToFilename[stem]
+                                    if (filename && remainingFiles.has(filename)) {
+                                        orderedList.push(filename)
+                                        remainingFiles.delete(filename)
+                                    }
+                                })
+                            })
+
+                            const remainingList = Array.from(remainingFiles).sort()
+                            
                             iconMap.value = map
+                            allIcons.value = [...orderedList, ...remainingList]
+                            loading.value = false // 数据处理完毕，关闭页面遮罩
                         })
-                        .catch(err => console.error('加载映射文件失败:', err))
+                        .catch(err => {
+                            console.error('加载映射文件失败:', err)
+                            // 即使映射失败，也要显示图标
+                            allIcons.value = rawIcons
+                            loading.value = false
+                        })
                 })
 
                 // 搜索过滤
@@ -137,16 +179,21 @@
                     return filteredIcons.value.slice(start, end).map(filename => {
                         const fileStem = filename.replace(/\.[^/.]+$/, "")
                         const displayName = iconMap.value[fileStem] || filename
-                        // 路径逻辑
                         const path = `icon/${filename}`
                         
                         return {
                             filename,
                             displayName,
-                            path
+                            path,
+                            loaded: !!imageLoadStatus[filename] // 获取加载状态
                         }
                     })
                 })
+                
+                // 处理图片加载完成
+                const handleImageLoad = (icon) => {
+                    imageLoadStatus[icon.filename] = true
+                }
 
                 const totalPages = computed(() => Math.ceil(filteredIcons.value.length / pageSize))
 
@@ -258,7 +305,9 @@
                     paginationRange,
                     changePage,
                     handleCopy,
-                    handleBase64
+                    handleBase64,
+                    loading,
+                    handleImageLoad
                 }
             }
         }).mount('#app')
