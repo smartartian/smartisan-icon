@@ -21,6 +21,9 @@
     <div class="icon-grid" v-show="!loading">
       <div v-for="icon in paginatedIcons" :key="icon.filename" class="icon-card" :title="icon.displayName">
         <div class="icon-image-wrapper" :class="{ loading: !icon.loaded }">
+          <!-- 动态背景层 -->
+          <div class="icon-bg" :style="{ backgroundImage: `url(t/${(allIcons.indexOf(icon.filename) % 3) + 1}.webp)` }"></div>
+          
           <img 
             :src="icon.path" 
             :alt="icon.displayName" 
