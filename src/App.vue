@@ -18,6 +18,7 @@
         @click="changeTheme(0)" 
         title="无背景"
       ></div>
+      <div class="divider-vertical"></div>
       <div 
         v-for="(bg, index) in backgroundImages"
         :key="bg"
@@ -30,79 +31,80 @@
     </div>
   </header>
 
-  <!-- 全局背景 -->
-  <div class="global-bg-container">
-    <div 
-      v-for="(bg, index) in backgroundImages"
-      :key="bg"
-      class="bg-layer" 
-      :class="{ active: currentTheme === index + 1 }"
-      :style="{ backgroundImage: `url(${bg})` }"
-    ></div>
-  </div>
-
-  <div class="container">
-    <!-- 页面加载遮罩 -->
-    <div v-if="loading" class="page-loader">
-      <div class="loader-spinner"></div>
-      <div class="loader-text">加载图标库...</div>
+  <div class="main-content">
+    <div class="global-bg-container">
+      <div 
+        v-for="(bg, index) in backgroundImages"
+        :key="bg"
+        class="bg-layer" 
+        :class="{ active: currentTheme === index + 1 }"
+        :style="{ backgroundImage: `url(${bg})` }"
+      ></div>
     </div>
 
-    <div class="icon-grid" v-show="!loading">
-      <div v-for="icon in paginatedIcons" :key="icon.filename" class="icon-card" :title="icon.displayName">
-        <div class="icon-image-wrapper" :class="{ loading: !icon.loaded }">
-          <img 
-            :src="icon.path" 
-            :alt="icon.displayName" 
-            :title="icon.displayName"
-            loading="lazy" 
-            :id="'img-' + icon.filename"
-            @load="handleImageLoad(icon)"
-            :class="{ loaded: icon.loaded }"
-          >
+    <div class="container">
+      <!-- 页面加载遮罩 -->
+      <div v-if="loading" class="page-loader">
+        <div class="loader-spinner"></div>
+        <div class="loader-text">加载图标库...</div>
+      </div>
+
+      <div class="icon-grid" v-show="!loading">
+        <div v-for="icon in paginatedIcons" :key="icon.filename" class="icon-card" :title="icon.displayName">
+          <div class="icon-image-wrapper" :class="{ loading: !icon.loaded }">
+            <img 
+              :src="icon.path" 
+              :alt="icon.displayName" 
+              :title="icon.displayName"
+              loading="lazy" 
+              :id="'img-' + icon.filename"
+              @load="handleImageLoad(icon)"
+              :class="{ loaded: icon.loaded }"
+            >
+          </div>
+          <div class="icon-name" :title="icon.displayName">{{ icon.displayName }}</div>
+          
+          <div class="icon-actions">
+            <button class="action-btn" @click="handleCopy(icon.path, '图片路径已复制')">复制路径</button>
+            <button class="action-btn" @click="handleCopy(icon.displayName, '图片名称已复制')">复制名称</button>
+            <button class="action-btn" @click="handleBase64(icon)">复制 Base64</button>
+          </div>
         </div>
-        <div class="icon-name" :title="icon.displayName">{{ icon.displayName }}</div>
         
-        <div class="icon-actions">
-          <button class="action-btn" @click="handleCopy(icon.path, '图片路径已复制')">复制路径</button>
-          <button class="action-btn" @click="handleCopy(icon.displayName, '图片名称已复制')">复制名称</button>
-          <button class="action-btn" @click="handleBase64(icon)">复制 Base64</button>
+        <div v-if="paginatedIcons.length === 0" style="text-align:center; grid-column: 1/-1; padding: 50px; color: #999;">
+          没有找到匹配的图标
         </div>
       </div>
-      
-      <div v-if="paginatedIcons.length === 0" style="text-align:center; grid-column: 1/-1; padding: 50px; color: #999;">
-        没有找到匹配的图标
+
+      <!-- 分页 -->
+      <div v-if="totalPages > 1" class="pagination">
+        <button 
+          class="page-btn" 
+          :disabled="currentPage === 1"
+          @click="changePage(currentPage - 1)"
+        >←</button>
+
+        <template v-for="page in paginationRange" :key="page">
+          <button 
+            v-if="page !== '...'"
+            class="page-btn" 
+            :class="{ active: currentPage === page }"
+            @click="changePage(page)"
+          >{{ page }}</button>
+          <span v-else class="page-dots">...</span>
+        </template>
+
+        <button 
+          class="page-btn" 
+          :disabled="currentPage === totalPages"
+          @click="changePage(currentPage + 1)"
+        >→</button>
       </div>
     </div>
 
-    <!-- 分页 -->
-    <div v-if="totalPages > 1" class="pagination">
-      <button 
-        class="page-btn" 
-        :disabled="currentPage === 1"
-        @click="changePage(currentPage - 1)"
-      >←</button>
-
-      <template v-for="page in paginationRange" :key="page">
-        <button 
-          v-if="page !== '...'"
-          class="page-btn" 
-          :class="{ active: currentPage === page }"
-          @click="changePage(page)"
-        >{{ page }}</button>
-        <span v-else class="page-dots">...</span>
-      </template>
-
-      <button 
-        class="page-btn" 
-        :disabled="currentPage === totalPages"
-        @click="changePage(currentPage + 1)"
-      >→</button>
-    </div>
+    <!-- 提示框容器 -->
+    <div id="toast-container"></div>
   </div>
-
-  <!-- 提示框容器 -->
-  <div id="toast-container"></div>
 </template>
 
 <script setup>
@@ -110,7 +112,7 @@ import { ref, computed, onMounted, watch, reactive } from 'vue'
 
 const searchKeyword = ref('')
 const currentPage = ref(1)
-const pageSize = 60
+const pageSize = 30
 const iconMap = ref({})
 const allIcons = ref([]) // 初始化为空，等待加载
 const loading = ref(true) // 页面级加载状态
@@ -142,6 +144,16 @@ const initTheme = () => {
         }
         currentTheme.value = index
     }
+    // 预加载所有背景图片，提升切换速度
+    preloadBackgroundImages()
+}
+
+// 预加载背景图片
+const preloadBackgroundImages = () => {
+    backgroundImages.value.forEach(src => {
+        const img = new Image()
+        img.src = src
+    })
 }
 
 // 图片加载状态字典，使用 reactive 保证响应性
